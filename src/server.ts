@@ -1,0 +1,16 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+export function create_server() {
+	const server = new McpServer(
+		{
+			name: 'Math MCP Server',
+			description: 'A server that provides mathematical computations.',
+			version: '1.0.0',
+		},
+		{
+			capabilities: {},
+		}
+	);
+
+	return server;
+}
