@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "keywords": [],
   "author": "",
@@ -12,14 +14,17 @@
   "packageManager": "pnpm@10.14.0",
   "type": "module",
   "dependencies": {
+    "@libsql/client": "^0.15.14",
     "@modelcontextprotocol/inspector": "^0.16.5",
     "@modelcontextprotocol/sdk": "^1.17.4",
+    "drizzle-orm": "^0.44.5",
     "express": "^5.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
+    "drizzle-kit": "^0.31.4",
     "typescript": "^5.9.2"
   }
 }

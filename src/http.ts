@@ -1,9 +1,14 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express, { type Request, type Response } from 'express';
 import { create_server } from './server.ts';
+import notes from './notes/index.ts';
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Mount notes router
+app.use('/', notes);
 
 const transports = new Map<string, StreamableHTTPServerTransport>();
 

@@ -1,9 +1,14 @@
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import express, { type Request, type Response } from 'express';
+import express from 'express';
+import notes from './notes/index.ts';
 import { create_server } from './server.ts';
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Mount notes router
+app.use('/', notes);
 
 const transports = new Map<string, SSEServerTransport>();
 
