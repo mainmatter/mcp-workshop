@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import * as z from 'zod';
 
 export function create_server() {
 	const server = new McpServer(
@@ -17,12 +18,15 @@ export function create_server() {
 	server.tool(
 		'random-number',
 		'Generate a random number between 0 and 100',
-		() => {
+		{ min: z.number(), max: z.number() },
+		({ min, max }) => {
 			return {
 				content: [
 					{
 						type: 'text',
-						text: JSON.stringify(Math.floor(Math.random() * 100)),
+						text: JSON.stringify(
+							Math.floor(Math.random() * (max - min + 1)) + min
+						),
 					},
 				],
 			};
