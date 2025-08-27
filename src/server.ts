@@ -8,7 +8,24 @@ export function create_server() {
 			version: '1.0.0',
 		},
 		{
-			capabilities: {},
+			capabilities: {
+				tools: {},
+			},
+		}
+	);
+
+	server.tool(
+		'random-number',
+		'Generate a random number between 0 and 100',
+		() => {
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify(Math.floor(Math.random() * 100)),
+					},
+				],
+			};
 		}
 	);
 
