@@ -18,7 +18,14 @@ export function create_server() {
 	server.tool(
 		'random-number',
 		'Generate a random number between 0 and 100',
-		{ min: z.number(), max: z.number() },
+		{
+			min: z
+				.number()
+				.describe('The minimum number the random number should be'),
+			max: z
+				.number()
+				.describe('The maximum number the random number should be'),
+		},
 		({ min, max }) => {
 			return {
 				content: [
