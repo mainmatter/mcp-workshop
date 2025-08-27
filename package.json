@@ -13,9 +13,11 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/inspector": "^0.16.5",
-    "@modelcontextprotocol/sdk": "^1.17.4"
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "express": "^5.1.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
     "typescript": "^5.9.2"
   }
