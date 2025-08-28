@@ -1,11 +1,8 @@
 {
 	"servers": {
-		"Math MCP server": {
-			"type": "stdio",
-			"command": "node",
-			"args": [
-				"./src/stdio.ts"
-			]
+		"Notes": {
+			"url": "http://localhost:3000/mcp",
+			"type": "http"
 		}
 	},
 	"inputs": []
