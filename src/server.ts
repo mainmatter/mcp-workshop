@@ -132,5 +132,87 @@ export function create_server() {
 		}
 	);
 
+	server.registerPrompt(
+		'notes-prompt',
+		{
+			description:
+				'A prompt that can be used to properly know how to use the notes tools',
+			title: 'Notes prompt',
+		},
+		async () => {
+			const all_notes = await db.select().from(notes).all();
+			return {
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: `Whenever I talk about notes I want you to use the notes tools to manage my notes.
+Here is a summary of the tools you can use:
+- get-notes: to get the list of all my notes
+- create-note: to create a new note, you must provide a title and content
+- update-note: to update an existing note, you must provide the ID of the note to update, and optionally a new title and/or content
+- delete-note: to delete a note, you must provide the ID of the note to delete
+Use these tools whenever I talk about notes, do not try to answer by yourself and do not use any other tool.
+
+Here's the list of all my current notes:
+
+${JSON.stringify(all_notes, null, 2)}
+
+In any moment you can use the get-notes tool to get the updated list of notes.
+
+Pay very careful attention to not create a new note when I want to update an existing one, in that case you must use the update-note tool providing the ID of the note to update.
+
+Pay very careful attention to not delete a note that I don't specifically ask you to delete.
+`,
+						},
+					},
+				],
+			};
+		}
+	);
+
+	server.registerPrompt(
+		'update-note-prompt',
+		{
+			description: 'A prompt that can be used to modify a specific note',
+			title: 'Modify a note',
+			argsSchema: {
+				id: z.string().describe('The ID of the note to modify'),
+			},
+		},
+		async ({ id }) => {
+			const note = await db
+				.select()
+				.from(notes)
+				.where(eq(notes.id, +id))
+				.get();
+			return {
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: `I want to modify the note with ID ${id}.
+							
+Here's the current content of the note: 
+
+<content>
+${note?.content}
+</content> 
+
+and the current title: 
+<title>
+${note?.title}
+</title>
+
+you should modify it like this (and please bugle check that you are modifying exactly this note): `,
+						},
+					},
+				],
+			};
+		}
+	);
+
 	return server;
 }
