@@ -1,4 +1,7 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+	McpServer,
+	ResourceTemplate,
+} from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { db } from './db/index.ts';
 import { notes } from './db/schema.ts';
@@ -229,6 +232,43 @@ you should modify it like this (and please bugle check that you are modifying ex
 						uri: uri.toString(),
 						mimeType: 'application/json',
 						text: JSON.stringify(all_notes),
+					},
+				],
+			};
+		}
+	);
+
+	server.registerResource(
+		'single-note',
+		new ResourceTemplate('notes://note/{id}.json', {
+			list: async () => {
+				const all_notes = await db.select().from(notes).all();
+				return {
+					resources: all_notes.map((note) => ({
+						name: `single-note-${note.id}`,
+						uri: `notes://note/${note.id}.json`,
+						title: note.title,
+						description: note.content.slice(0, 100),
+					})),
+				};
+			},
+		}),
+		{
+			description: 'A single user note',
+			title: 'A defined user note',
+		},
+		async (uri, { id }) => {
+			const note = await db
+				.select()
+				.from(notes)
+				.where(eq(notes.id, +(id ?? 0)))
+				.get();
+			return {
+				contents: [
+					{
+						uri: uri.toString(),
+						mimeType: 'application/json',
+						text: JSON.stringify(note),
 					},
 				],
 			};
