@@ -5,7 +5,8 @@ import {
 import * as z from 'zod';
 import { db } from './db/index.ts';
 import { notes } from './db/schema.ts';
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
+import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
 
 const NoteSchema = z.object({
 	id: z.number(),
@@ -181,7 +182,18 @@ Pay very careful attention to not delete a note that I don't specifically ask yo
 			description: 'A prompt that can be used to modify a specific note',
 			title: 'Modify a note',
 			argsSchema: {
-				id: z.string().describe('The ID of the note to modify'),
+				id: completable(
+					z.string().describe('The ID of the note to modify'),
+					async () => {
+						const all_notes = await db
+							.select({
+								id: notes.id,
+							})
+							.from(notes)
+							.all();
+						return all_notes.map((note) => note.id.toString());
+					}
+				),
 			},
 		},
 		async ({ id }) => {
@@ -251,6 +263,16 @@ you should modify it like this (and please bugle check that you are modifying ex
 						description: note.content.slice(0, 100),
 					})),
 				};
+			},
+			complete: {
+				id: async (query) => {
+					const all_notes = await db
+						.select()
+						.from(notes)
+						.where(like(notes.title, `%${query}%`))
+						.all();
+					return all_notes.map((note) => note.id.toString());
+				},
 			},
 		}),
 		{
