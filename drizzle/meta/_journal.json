@@ -8,6 +8,13 @@
       "when": 1756309349239,
       "tag": "0000_eager_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1756733511511,
+      "tag": "0001_chief_microchip",
+      "breakpoints": true
     }
   ]
 }

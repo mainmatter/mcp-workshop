@@ -1,12 +1,37 @@
+import { desc, eq } from 'drizzle-orm';
 import express, { Router, type Request, type Response } from 'express';
 import { db } from '../db/index.ts';
-import { notes } from '../db/schema.ts';
-import { desc, eq } from 'drizzle-orm';
+import type { Note, Tag } from '../db/schema.ts';
+import { note_tags, notes, tags } from '../db/schema.ts';
 
 const router: Router = express.Router();
 
+// Helper function to get notes with tags using joins
+async function get_notes_with_tags() {
+	// First get all notes (or filtered by tag)
+	const all = await db
+		.select()
+		.from(notes)
+		.innerJoin(note_tags, eq(note_tags.note_id, notes.id))
+		.innerJoin(tags, eq(note_tags.tag_id, tags.id))
+		.orderBy(desc(notes.created_at));
+	const map = new Map<number, Note & { tags: Tag[] }>();
+	for (const row of all) {
+		const note = row.notes;
+		const tag = row.tags;
+		if (!map.has(note.id)) {
+			map.set(note.id, { ...note, tags: [] });
+		}
+		map.get(note.id)!.tags.push(tag);
+	}
+	return [...map.values()];
+}
+
 // Generate HTML page
-function generate_html(notes_list: any[], message?: string) {
+function generate_html(
+	notes_list: Array<Note & { tags: Tag[] }>,
+	message?: string
+) {
 	return `
 <!DOCTYPE html>
 <html lang="en">
@@ -206,6 +231,22 @@ function generate_html(notes_list: any[], message?: string) {
 			border: 2px dashed #374151;
 			font-size: 18px;
 		}
+
+		.tags-container {
+			margin: 12px 0;
+		}
+
+		.tag {
+			display: inline-block;
+			background: var(--tag-color, #3b82f6);
+			color: white;
+			padding: 4px 8px;
+			border-radius: 4px;
+			font-size: 12px;
+			font-weight: 500;
+			margin-right: 6px;
+			margin-bottom: 4px;
+		}
 		
 		/* Scrollbar styling for dark mode */
 		::-webkit-scrollbar {
@@ -261,6 +302,10 @@ function generate_html(notes_list: any[], message?: string) {
 				<label for="content">Content</label>
 				<textarea id="content" name="content" required maxlength="1000" placeholder="Write your note here..."></textarea>
 			</div>
+			<div class="form-group">
+				<label for="tags">Tags (comma-separated)</label>
+				<input type="text" id="tags" name="tags" placeholder="work, personal, important...">
+			</div>
 			<button class="btn">Add Note</button>
 		</form>
 		
@@ -279,6 +324,23 @@ function generate_html(notes_list: any[], message?: string) {
 							</form>
 						</div>
 						<div class="note-content">${escape_html(note.content)}</div>
+						${
+							note.tags && note.tags.length > 0
+								? `
+							<div class="tags-container">
+								${note.tags
+									.map(
+										(tag: any) => `
+									<span class="tag" style="--tag-color: ${tag.color}">${escape_html(
+											tag.name
+										)}</span>
+								`
+									)
+									.join('')}
+							</div>
+						`
+								: ''
+						}
 						<div class="note-footer">
 							<span>Created: ${format_date(note.created_at)}</span>
 						</div>
@@ -325,10 +387,9 @@ function format_date(date_string: string): string {
 // Routes
 router.get('/', async (req: Request, res: Response) => {
 	try {
-		const notes_list = await db
-			.select()
-			.from(notes)
-			.orderBy(desc(notes.created_at));
+		// Get notes with tags using helper function
+		const notes_list = await get_notes_with_tags();
+
 		const html = generate_html(notes_list);
 		res.send(html);
 	} catch (error) {
@@ -338,13 +399,11 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 router.post('/', async (req: Request, res: Response) => {
-	const { title, content } = req.body;
+	const { title, content, tags: tags_string } = req.body;
 
 	if (!title || !content) {
-		const notes_list = await db
-			.select()
-			.from(notes)
-			.orderBy(desc(notes.created_at));
+		// Get notes with tags for error display
+		const notes_list = await get_notes_with_tags();
 		const html = generate_html(
 			notes_list,
 			'Please fill in both title and content'
@@ -353,18 +412,47 @@ router.post('/', async (req: Request, res: Response) => {
 	}
 
 	try {
-		await db.insert(notes).values({
-			title: title.trim(),
-			content: content.trim(),
-		});
+		// Create the note
+		const [created_note] = await db
+			.insert(notes)
+			.values({
+				title: title.trim(),
+				content: content.trim(),
+			})
+			.returning();
+
+		// Handle tags if provided
+		if (created_note && tags_string?.trim()) {
+			const tag_names = tags_string
+				.split(',')
+				.map((tag: string) => tag.trim())
+				.filter((tag: string) => tag);
+
+			for (const tag_name of tag_names) {
+				// Get or create tag
+				let tag = await db
+					.select()
+					.from(tags)
+					.where(eq(tags.name, tag_name))
+					.get();
+				if (!tag) {
+					[tag] = await db
+						.insert(tags)
+						.values({ name: tag_name })
+						.returning();
+				}
+				// Link note to tag
+				await db
+					.insert(note_tags)
+					.values({ note_id: created_note.id, tag_id: tag!.id });
+			}
+		}
 
 		res.redirect('/');
 	} catch (error) {
 		console.error('Error creating note:', error);
-		const notes_list = await db
-			.select()
-			.from(notes)
-			.orderBy(desc(notes.created_at));
+		// Get notes with tags for error display
+		const notes_list = await get_notes_with_tags();
 		const html = generate_html(notes_list, 'Error creating note');
 		res.send(html);
 	}
@@ -382,10 +470,8 @@ router.post('/delete', async (req: Request, res: Response) => {
 		res.redirect('/');
 	} catch (error) {
 		console.error('Error deleting note:', error);
-		const notes_list = await db
-			.select()
-			.from(notes)
-			.orderBy(desc(notes.created_at));
+		// Get notes with tags for error display
+		const notes_list = await get_notes_with_tags();
 		const html = generate_html(notes_list, 'Error deleting note');
 		res.send(html);
 	}
