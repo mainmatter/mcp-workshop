@@ -7,6 +7,7 @@ import { db } from './db/index.ts';
 import { notes } from './db/schema.ts';
 import { eq, like } from 'drizzle-orm';
 import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
+import { create_tag_for_note } from './db/utils.ts';
 
 const NoteSchema = z.object({
 	id: z.number(),
@@ -71,6 +72,35 @@ export function create_server() {
 				.insert(notes)
 				.values({ content, title })
 				.returning();
+
+			if (created) {
+				const response = await server.server.elicitInput({
+					message: 'Which tags should be added to the note',
+					requestedSchema: {
+						type: 'object',
+						properties: {
+							tags: {
+								type: 'string',
+							},
+						},
+						required: ['tags'],
+					},
+				});
+
+				if (
+					response.action === 'accept' &&
+					response.content != null &&
+					'content' in response &&
+					typeof response.content === 'object' &&
+					response.content !== null &&
+					'tags' in response.content &&
+					typeof response.content.tags === 'string' &&
+					response.content.tags.trim()
+				) {
+					create_tag_for_note(response.content.tags, created.id);
+				}
+			}
+
 			return {
 				content: [
 					{
