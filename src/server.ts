@@ -214,5 +214,26 @@ you should modify it like this (and please bugle check that you are modifying ex
 		}
 	);
 
+	server.registerResource(
+		'all-notes',
+		'notes://all.json',
+		{
+			description: "All the user's notes",
+			title: "User's notes",
+		},
+		async (uri) => {
+			const all_notes = await db.select().from(notes).all();
+			return {
+				contents: [
+					{
+						uri: uri.toString(),
+						mimeType: 'application/json',
+						text: JSON.stringify(all_notes),
+					},
+				],
+			};
+		}
+	);
+
 	return server;
 }
