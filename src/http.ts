@@ -1,11 +1,17 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express, { type Request, type Response } from 'express';
+import cookieParser from 'cookie-parser';
 import { create_server } from './server.ts';
 import notes from './notes/index.ts';
+import auth from './auth/routes.ts';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Mount auth router first
+app.use('/', auth);
 
 // Mount notes router
 app.use('/', notes);

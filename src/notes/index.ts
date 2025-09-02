@@ -1,8 +1,9 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import express, { Router, type Request, type Response } from 'express';
+import { require_auth } from '../auth/middleware.ts';
 import { db } from '../db/index.ts';
 import type { Note, Tag } from '../db/schema.ts';
-import { note_tags, notes, tags } from '../db/schema.ts';
+import { notes } from '../db/schema.ts';
 import { create_tag_for_note, get_notes_with_tags } from '../db/utils.ts';
 
 const router: Router = express.Router();
@@ -10,6 +11,7 @@ const router: Router = express.Router();
 // Generate HTML page
 function generate_html(
 	notes_list: Array<Note & { tags: Tag[] }>,
+	username: string,
 	message?: string
 ) {
 	return `
@@ -269,7 +271,12 @@ function generate_html(
 </head>
 <body>
 	<div class="container">
-		<h1>📝 Simple Notes App</h1>
+		<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+			<h1 style="margin: 0;">📝 ${username}'s Notes</h1>
+			<form method="POST" action="/logout" style="margin: 0;">
+				<button class="btn btn-danger" style="padding: 8px 16px; font-size: 14px;">Logout</button>
+			</form>
+		</div>
 		
 		${message ? `<div class="message">${message}</div>` : ''}
 		
@@ -365,12 +372,12 @@ function format_date(date_string: string): string {
 }
 
 // Routes
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', require_auth, async (req: Request, res: Response) => {
 	try {
-		// Get notes with tags using helper function
-		const notes_list = await get_notes_with_tags();
+		// Get notes with tags for the authenticated user
+		const notes_list = await get_notes_with_tags(req.user!.id);
 
-		const html = generate_html(notes_list);
+		const html = generate_html(notes_list, req.user!.username);
 		res.send(html);
 	} catch (error) {
 		console.error('Error fetching notes:', error);
@@ -378,26 +385,28 @@ router.get('/', async (req: Request, res: Response) => {
 	}
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', require_auth, async (req: Request, res: Response) => {
 	const { title, content, tags: tags_string } = req.body;
 
 	if (!title || !content) {
 		// Get notes with tags for error display
-		const notes_list = await get_notes_with_tags();
+		const notes_list = await get_notes_with_tags(req.user!.id);
 		const html = generate_html(
 			notes_list,
+			req.user!.username,
 			'Please fill in both title and content'
 		);
 		return res.send(html);
 	}
 
 	try {
-		// Create the note
+		// Create the note with user_id
 		const [created_note] = await db
 			.insert(notes)
 			.values({
 				title: title.trim(),
 				content: content.trim(),
+				user_id: req.user!.id,
 			})
 			.returning();
 
@@ -410,13 +419,17 @@ router.post('/', async (req: Request, res: Response) => {
 	} catch (error) {
 		console.error('Error creating note:', error);
 		// Get notes with tags for error display
-		const notes_list = await get_notes_with_tags();
-		const html = generate_html(notes_list, 'Error creating note');
+		const notes_list = await get_notes_with_tags(req.user!.id);
+		const html = generate_html(
+			notes_list,
+			req.user!.username,
+			'Error creating note'
+		);
 		res.send(html);
 	}
 });
 
-router.post('/delete', async (req: Request, res: Response) => {
+router.post('/delete', require_auth, async (req: Request, res: Response) => {
 	const { id } = req.body;
 
 	if (!id) {
@@ -424,13 +437,22 @@ router.post('/delete', async (req: Request, res: Response) => {
 	}
 
 	try {
-		await db.delete(notes).where(eq(notes.id, parseInt(id)));
+		// Only allow deleting notes owned by the current user
+		await db
+			.delete(notes)
+			.where(
+				and(eq(notes.id, parseInt(id)), eq(notes.user_id, req.user!.id))
+			);
 		res.redirect('/');
 	} catch (error) {
 		console.error('Error deleting note:', error);
 		// Get notes with tags for error display
-		const notes_list = await get_notes_with_tags();
-		const html = generate_html(notes_list, 'Error deleting note');
+		const notes_list = await get_notes_with_tags(req.user!.id);
+		const html = generate_html(
+			notes_list,
+			req.user!.username,
+			'Error deleting note'
+		);
 		res.send(html);
 	}
 });

@@ -1,16 +1,18 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, and } from 'drizzle-orm';
 import { db } from './index.ts';
 import { note_tags, notes, tags, type Note, type Tag } from './schema.ts';
 
-// Helper function to get notes with tags using joins
-export async function get_notes_with_tags() {
-	// First get all notes (or filtered by tag)
+// Helper function to get notes with tags for a specific user
+export async function get_notes_with_tags(user_id: number) {
+	// Get notes with tags for the specific user
 	const all = await db
 		.select()
 		.from(notes)
-		.innerJoin(note_tags, eq(note_tags.note_id, notes.id))
-		.innerJoin(tags, eq(note_tags.tag_id, tags.id))
+		.leftJoin(note_tags, eq(note_tags.note_id, notes.id))
+		.leftJoin(tags, eq(note_tags.tag_id, tags.id))
+		.where(eq(notes.user_id, user_id))
 		.orderBy(desc(notes.created_at));
+
 	const map = new Map<number, Note & { tags: Tag[] }>();
 	for (const row of all) {
 		const note = row.notes;
@@ -18,7 +20,9 @@ export async function get_notes_with_tags() {
 		if (!map.has(note.id)) {
 			map.set(note.id, { ...note, tags: [] });
 		}
-		map.get(note.id)!.tags.push(tag);
+		if (tag) {
+			map.get(note.id)!.tags.push(tag);
+		}
 	}
 	return [...map.values()];
 }

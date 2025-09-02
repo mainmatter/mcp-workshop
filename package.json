@@ -17,11 +17,13 @@
     "@libsql/client": "^0.15.14",
     "@modelcontextprotocol/inspector": "^0.16.5",
     "@modelcontextprotocol/sdk": "^1.17.4",
+    "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.44.5",
     "express": "^5.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
     "drizzle-kit": "^0.31.4",
