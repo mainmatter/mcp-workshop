@@ -73,7 +73,7 @@ export function create_server() {
 				.values({ content, title })
 				.returning();
 
-			if (created) {
+			if (created && server.server.getClientCapabilities()?.elicitation) {
 				const response = await server.server.elicitInput({
 					message: 'Which tags should be added to the note',
 					requestedSchema: {
