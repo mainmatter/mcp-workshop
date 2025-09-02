@@ -87,18 +87,19 @@ export function create_server() {
 					},
 				});
 
-				if (
-					response.action === 'accept' &&
-					response.content != null &&
-					'content' in response &&
-					typeof response.content === 'object' &&
-					response.content !== null &&
-					'tags' in response.content &&
-					typeof response.content.tags === 'string' &&
-					response.content.tags.trim()
-				) {
-					create_tag_for_note(response.content.tags, created.id);
-				}
+				const validated_response = z
+					.object({
+						action: z.literal('accept'),
+						content: z.object({
+							tags: z.string(),
+						}),
+					})
+					.parse(response);
+
+				create_tag_for_note(
+					validated_response.content.tags,
+					created.id
+				);
 			}
 
 			return {
