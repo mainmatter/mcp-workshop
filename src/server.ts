@@ -47,6 +47,23 @@ export function create_server() {
 						type: 'text',
 						text: JSON.stringify({ notes: all_notes }),
 					},
+					{
+						type: 'resource_link',
+						name: 'all-notes',
+						uri: 'notes://all.json',
+						description: "All the user's notes",
+						title: "User's notes",
+					},
+					{
+						type: 'resource',
+						resource: {
+							uri: 'notes://all.json',
+							mimeType: 'application/json',
+							title: "User's notes",
+							description: "All the user's notes",
+							text: JSON.stringify(all_notes),
+						},
+					},
 				],
 				structuredContent: { notes: all_notes },
 			};
@@ -169,6 +186,29 @@ Pay very careful attention to not create a new note when I want to update an exi
 
 Pay very careful attention to not delete a note that I don't specifically ask you to delete.
 `,
+						},
+					},
+					{
+						role: 'user',
+						content: {
+							type: 'resource_link',
+							name: 'all-notes',
+							uri: 'notes://all.json',
+							description: "All the user's notes",
+							title: "User's notes",
+						},
+					},
+					{
+						role: 'user',
+						content: {
+							type: 'resource',
+							resource: {
+								uri: 'notes://all.json',
+								mimeType: 'application/json',
+								title: "User's notes",
+								description: "All the user's notes",
+								text: JSON.stringify(all_notes),
+							},
 						},
 					},
 				],
