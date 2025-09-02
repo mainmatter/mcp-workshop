@@ -94,10 +94,22 @@ export function create_server() {
 							tags: z.string(),
 						}),
 					})
-					.parse(response);
+					.safeParse(response);
+
+				if (!validated_response.success) {
+					return {
+						isError: true,
+						content: [
+							{
+								type: 'text',
+								text: JSON.stringify(validated_response.error),
+							},
+						],
+					};
+				}
 
 				create_tag_for_note(
-					validated_response.content.tags,
+					validated_response.data.content.tags,
 					created.id
 				);
 			}
