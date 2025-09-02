@@ -41,6 +41,9 @@ export function create_server() {
 			},
 		},
 		async () => {
+			server.server.listRoots().then((roots) => {
+				console.log('Server roots:', roots);
+			});
 			const all_notes = await db.select().from(notes).all();
 			return {
 				content: [
