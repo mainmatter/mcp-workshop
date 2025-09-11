@@ -4,11 +4,16 @@ import cookieParser from 'cookie-parser';
 import { create_server } from './server.ts';
 import notes from './notes/index.ts';
 import auth from './auth/routes.ts';
+import {
+	mcp_auth_router,
+	get_user_from_access_token,
+} from './auth/mcp/index.ts';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(mcp_auth_router);
 
 // Mount auth router first
 app.use('/', auth);
@@ -20,6 +25,19 @@ const transports = new Map<string, StreamableHTTPServerTransport>();
 
 app.post('/mcp', async (req, res) => {
 	try {
+		const [, token] = (req.headers['authorization'] ?? '').split(' ');
+		if (!token) {
+			res.status(401).json({ error: 'Unauthorized' });
+			return;
+		}
+
+		// Get user from access token
+		const user = await get_user_from_access_token(token);
+		if (!user) {
+			res.status(401).json({ error: 'Invalid access token' });
+			return;
+		}
+
 		const session_id = req.headers['mcp-session-id'] as string | undefined;
 
 		let transport: StreamableHTTPServerTransport;
@@ -27,7 +45,7 @@ app.post('/mcp', async (req, res) => {
 		if (session_id && transports.has(session_id)) {
 			transport = transports.get(session_id)!;
 		} else {
-			const server = create_server();
+			const server = create_server(user);
 			transport = new StreamableHTTPServerTransport({
 				sessionIdGenerator: () => crypto.randomUUID(),
 				onsessioninitialized(session_id) {

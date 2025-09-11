@@ -1,18 +1,22 @@
 import express, { Router, type Request, type Response } from 'express';
 import {
-	login_user,
-	register_user,
 	create_session,
 	delete_session,
+	login_user,
+	register_user,
 } from './index.ts';
-import { redirect_if_authenticated } from './middleware.ts';
+import { optional_auth, redirect_if_authenticated } from './middleware.ts';
+import { db } from '../db/index.ts';
+import { oauth_authorization_codes } from '../db/schema.ts';
+import { eq } from 'drizzle-orm';
 
 const router: Router = express.Router();
 
 // Generate login/register HTML page
 function generate_auth_html(
 	message?: string,
-	message_type: 'error' | 'success' = 'error'
+	message_type: 'error' | 'success' = 'error',
+	return_url?: string
 ) {
 	return `
 <!DOCTYPE html>
@@ -198,6 +202,11 @@ function generate_auth_html(
 		
 		<div class="auth-forms">
 			<form method="POST" action="/login" class="auth-form">
+				${
+					return_url
+						? `<input type="hidden" name="return_url" value="${return_url}">`
+						: ''
+				}
 				<h2 class="form-title">Login</h2>
 				<div class="form-group">
 					<label for="login-username">Username</label>
@@ -212,6 +221,11 @@ function generate_auth_html(
 					<span>or</span>
 				</div>
 				<button formaction="/register" type="submit" class="btn btn-secondary">Register</button>
+				${
+					return_url
+						? `<input type="hidden" name="return_url" value="${return_url}">`
+						: ''
+				}
 			</form>
 		</div>
 	</div>
@@ -224,7 +238,8 @@ router.get(
 	'/login',
 	redirect_if_authenticated,
 	(req: Request, res: Response) => {
-		const html = generate_auth_html();
+		const return_url = req.query.return_url as string | undefined;
+		const html = generate_auth_html(undefined, 'error', return_url);
 		res.send(html);
 	}
 );
@@ -234,12 +249,13 @@ router.post(
 	'/login',
 	redirect_if_authenticated,
 	async (req: Request, res: Response) => {
-		const { username, password } = req.body;
+		const { username, password, return_url } = req.body;
 
 		if (!username || !password) {
 			const html = generate_auth_html(
 				'Please fill in both username and password',
-				'error'
+				'error',
+				return_url
 			);
 			return res.send(html);
 		}
@@ -249,7 +265,8 @@ router.post(
 		if (!user) {
 			const html = generate_auth_html(
 				'Invalid username or password',
-				'error'
+				'error',
+				return_url
 			);
 			return res.send(html);
 		}
@@ -265,7 +282,8 @@ router.post(
 			maxAge: 24 * 60 * 60 * 1000, // 24 hours
 		});
 
-		res.redirect('/');
+		// Redirect to return_url if provided, otherwise to home
+		res.redirect(return_url || '/');
 	}
 );
 
@@ -274,12 +292,13 @@ router.post(
 	'/register',
 	redirect_if_authenticated,
 	async (req: Request, res: Response) => {
-		const { username, password } = req.body;
+		const { username, password, return_url } = req.body;
 
 		if (!username || !password) {
 			const html = generate_auth_html(
 				'Please fill in both username and password',
-				'error'
+				'error',
+				return_url
 			);
 			return res.send(html);
 		}
@@ -287,7 +306,8 @@ router.post(
 		if (username.trim().length < 3) {
 			const html = generate_auth_html(
 				'Username must be at least 3 characters long',
-				'error'
+				'error',
+				return_url
 			);
 			return res.send(html);
 		}
@@ -295,7 +315,8 @@ router.post(
 		if (password.length < 4) {
 			const html = generate_auth_html(
 				'Password must be at least 4 characters long',
-				'error'
+				'error',
+				return_url
 			);
 			return res.send(html);
 		}
@@ -303,7 +324,11 @@ router.post(
 		const user = await register_user(username.trim(), password);
 
 		if (!user) {
-			const html = generate_auth_html('Username already exists', 'error');
+			const html = generate_auth_html(
+				'Username already exists',
+				'error',
+				return_url
+			);
 			return res.send(html);
 		}
 
@@ -319,7 +344,8 @@ router.post(
 			maxAge: 24 * 60 * 60 * 1000, // 24 hours
 		});
 
-		res.redirect('/');
+		// Redirect to return_url if provided, otherwise to home
+		res.redirect(return_url || '/');
 	}
 );
 
@@ -334,5 +360,35 @@ router.post('/logout', async (req: Request, res: Response) => {
 	res.clearCookie('session_id');
 	res.redirect('/login');
 });
+
+// OAuth authorization endpoint
+router.get(
+	'/auth/oauth/authorize',
+	optional_auth,
+	async (req: Request, res: Response) => {
+		const { success_redirect, code } = req.query as Record<string, string>;
+
+		if (success_redirect == null) {
+			return res.status(400).send('Missing success_redirect parameter');
+		}
+
+		// Check if user is authenticated
+		if (!req.user) {
+			// User is not logged in, redirect to login page with return URL
+			const login_url = new URL('/login', 'http://localhost:3000');
+			login_url.searchParams.set('return_url', success_redirect);
+			return res.redirect(login_url.toString());
+		}
+
+		await db
+			.update(oauth_authorization_codes)
+			.set({
+				user_id: req.user.id,
+			})
+			.where(eq(oauth_authorization_codes.id, code!));
+
+		res.redirect(success_redirect.toString());
+	}
+);
 
 export default router;

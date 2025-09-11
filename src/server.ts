@@ -5,19 +5,20 @@ import {
 import * as z from 'zod';
 import { db } from './db/index.ts';
 import { notes } from './db/schema.ts';
-import { eq, like } from 'drizzle-orm';
+import { eq, like, and } from 'drizzle-orm';
 import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
 import { create_tag_for_note } from './db/utils.ts';
 
 const NoteSchema = z.object({
 	id: z.number(),
 	title: z.string(),
+	user_id: z.number(),
 	content: z.string(),
 	created_at: z.string(),
 	updated_at: z.string(),
 });
 
-export function create_server() {
+export function create_server(user?: { id: number; username: string }) {
 	const server = new McpServer(
 		{
 			name: 'Math MCP Server',
@@ -44,7 +45,22 @@ export function create_server() {
 			server.server.listRoots().then((roots) => {
 				console.log('Server roots:', roots);
 			});
-			const all_notes = await db.select().from(notes).all();
+			if (!user) {
+				return {
+					isError: true,
+					content: [
+						{
+							type: 'text',
+							text: 'User not authenticated',
+						},
+					],
+				};
+			}
+			const all_notes = await db
+				.select()
+				.from(notes)
+				.where(eq(notes.user_id, user.id))
+				.all();
 			return {
 				content: [
 					{
@@ -88,9 +104,21 @@ export function create_server() {
 			},
 		},
 		async ({ content, title }) => {
+			if (!user) {
+				return {
+					isError: true,
+					content: [
+						{
+							type: 'text',
+							text: 'User not authenticated',
+						},
+					],
+				};
+			}
+
 			const [created] = await db
 				.insert(notes)
-				.values({ content, title })
+				.values({ content, title, user_id: user.id })
 				.returning();
 
 			if (created && server.server.getClientCapabilities()?.elicitation) {
@@ -165,10 +193,22 @@ export function create_server() {
 			},
 		},
 		async ({ content, title, id }) => {
+			if (!user) {
+				return {
+					isError: true,
+					content: [
+						{
+							type: 'text',
+							text: 'User not authenticated',
+						},
+					],
+				};
+			}
+
 			const [updated] = await db
 				.update(notes)
 				.set({ content, title })
-				.where(eq(notes.id, id))
+				.where(and(eq(notes.id, id), eq(notes.user_id, user.id)))
 				.returning();
 			return {
 				content: [
@@ -192,7 +232,22 @@ export function create_server() {
 			},
 		},
 		async ({ id }) => {
-			await db.delete(notes).where(eq(notes.id, id)).execute();
+			if (!user) {
+				return {
+					isError: true,
+					content: [
+						{
+							type: 'text',
+							text: 'User not authenticated',
+						},
+					],
+				};
+			}
+
+			await db
+				.delete(notes)
+				.where(and(eq(notes.id, id), eq(notes.user_id, user.id)))
+				.execute();
 			return {
 				content: [],
 			};
@@ -207,7 +262,14 @@ export function create_server() {
 			title: 'Notes prompt',
 		},
 		async () => {
-			const all_notes = await db.select().from(notes).all();
+			if (!user) {
+				throw new Error('User not authenticated');
+			}
+			const all_notes = await db
+				.select()
+				.from(notes)
+				.where(eq(notes.user_id, user.id))
+				.all();
 			return {
 				messages: [
 					{
@@ -271,11 +333,15 @@ Pay very careful attention to not delete a note that I don't specifically ask yo
 				id: completable(
 					z.string().describe('The ID of the note to modify'),
 					async () => {
+						if (!user) {
+							throw new Error('User not authenticated');
+						}
 						const all_notes = await db
 							.select({
 								id: notes.id,
 							})
 							.from(notes)
+							.where(eq(notes.user_id, user.id))
 							.all();
 						return all_notes.map((note) => note.id.toString());
 					}
@@ -283,10 +349,13 @@ Pay very careful attention to not delete a note that I don't specifically ask yo
 			},
 		},
 		async ({ id }) => {
+			if (!user) {
+				throw new Error('User not authenticated');
+			}
 			const note = await db
 				.select()
 				.from(notes)
-				.where(eq(notes.id, +id))
+				.where(and(eq(notes.id, +id), eq(notes.user_id, user.id)))
 				.get();
 			return {
 				messages: [
@@ -323,7 +392,14 @@ you should modify it like this (and please bugle check that you are modifying ex
 			title: "User's notes",
 		},
 		async (uri) => {
-			const all_notes = await db.select().from(notes).all();
+			if (!user) {
+				throw new Error('User not authenticated');
+			}
+			const all_notes = await db
+				.select()
+				.from(notes)
+				.where(eq(notes.user_id, user.id))
+				.all();
 			return {
 				contents: [
 					{
@@ -340,7 +416,14 @@ you should modify it like this (and please bugle check that you are modifying ex
 		'single-note',
 		new ResourceTemplate('notes://note/{id}.json', {
 			list: async () => {
-				const all_notes = await db.select().from(notes).all();
+				if (!user) {
+					throw new Error('User not authenticated');
+				}
+				const all_notes = await db
+					.select()
+					.from(notes)
+					.where(eq(notes.user_id, user.id))
+					.all();
 				return {
 					resources: all_notes.map((note) => ({
 						name: `single-note-${note.id}`,
@@ -352,10 +435,18 @@ you should modify it like this (and please bugle check that you are modifying ex
 			},
 			complete: {
 				id: async (query) => {
+					if (!user) {
+						throw new Error('User not authenticated');
+					}
 					const all_notes = await db
 						.select()
 						.from(notes)
-						.where(like(notes.title, `%${query}%`))
+						.where(
+							and(
+								like(notes.title, `%${query}%`),
+								eq(notes.user_id, user.id)
+							)
+						)
 						.all();
 					return all_notes.map((note) => note.id.toString());
 				},
@@ -366,10 +457,15 @@ you should modify it like this (and please bugle check that you are modifying ex
 			title: 'A defined user note',
 		},
 		async (uri, { id }) => {
+			if (!user) {
+				throw new Error('User not authenticated');
+			}
 			const note = await db
 				.select()
 				.from(notes)
-				.where(eq(notes.id, +(id ?? 0)))
+				.where(
+					and(eq(notes.id, +(id ?? 0)), eq(notes.user_id, user.id))
+				)
 				.get();
 			return {
 				contents: [
