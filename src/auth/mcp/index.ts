@@ -97,7 +97,7 @@ class OAuth implements OAuthServerProvider {
 			expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
 			...client,
 		});
-		const success_redirect = new URL(client.redirect_uris[0]!);
+		const success_redirect = new URL(params.redirectUri);
 		success_redirect.searchParams.set('code', code);
 		if (params.state) {
 			success_redirect.searchParams.set('state', params.state);

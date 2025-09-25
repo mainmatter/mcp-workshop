@@ -376,7 +376,11 @@ router.get(
 		if (!req.user) {
 			// User is not logged in, redirect to login page with return URL
 			const login_url = new URL('/login', 'http://localhost:3000');
-			login_url.searchParams.set('return_url', success_redirect);
+
+			login_url.searchParams.set(
+				'return_url',
+				new URL(req.url, 'http://localhost:3000').toString()
+			);
 			return res.redirect(login_url.toString());
 		}
 
